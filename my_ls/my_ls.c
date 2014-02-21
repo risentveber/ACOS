@@ -33,11 +33,11 @@ struct stat {
 void print_full_file_info(const char* file_name, const struct stat * f_stat)
 {
 	mode_t mode = f_stat->st_mode;
-	
+	putchar('\t');
 	if(S_ISDIR(mode))
 		putchar('d');
 	else if(S_ISLNK(mode))
-		putchar('d');
+		putchar('l');
 	else
 		putchar('-');
 
@@ -81,16 +81,19 @@ void print_dir(const char* program_name, const char *dir_name, int flag_l)
 
 	printf("%s contains:\n", dir_name);
 	while (tmp_name){
-		//if (tmp_name->d_name[0] != '.') {
-			putchar('\t');
+		if (tmp_name->d_name[0] != '.') {
 			if (flag_l){// print full information
 				strcpy(full_file_name, dir_name);
+				strcat(full_file_name, "/");
 				strcat(full_file_name, tmp_name->d_name);
-				stat(full_file_name, &tmp_stat);
-				print_full_file_info(tmp_name->d_name, &tmp_stat);
+				//puts(full_file_name);
+				if(stat(full_file_name, &tmp_stat) == 0)
+					print_full_file_info(tmp_name->d_name, &tmp_stat);
+				else 
+					perror(tmp_name->d_name);
 			} else
-				printf("%s\n", tmp_name->d_name);
-		//}
+				printf("\t%s\n", tmp_name->d_name);
+		}
 		tmp_name = readdir(dir);
 	}
 
