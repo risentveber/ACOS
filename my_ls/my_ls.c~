@@ -12,8 +12,6 @@
 #include <pwd.h>
 #include <time.h>
 
-#include "queue.h"
-
 void print_usage(const char * name)
 {
 	printf("usage %s is:\n", name);
@@ -22,7 +20,6 @@ void print_usage(const char * name)
 	printf("\t-l --list print full information\n");
 	printf("\t-a --all  print all files\n");
 	printf("\t-h --help print help message\n");
-	printf("\t-r --recursively print recursively\n");
 	printf("\n");
 }
 
@@ -36,6 +33,7 @@ struct stat {
                time_t    st_mtime;   / time of last modification /
                time_t    st_ctime;   / time of last status change /
            };
+
 */
 
 void print_full_file_info(const char* file_name, const struct stat * f_stat)
@@ -122,65 +120,41 @@ void print_full_file_info(const char* file_name, const struct stat * f_stat)
 }
 
 
-void print_dir(const char* program_name, const char *base_dir_name, int flag_l, int flag_a, int flag_r)
+void print_dir(const char* program_name, const char *dir_name, int flag_l, int flag_a)
 {
+	DIR * dir = opendir(dir_name);
+
+	if (dir == NULL){
+		fprintf(stderr, "%s: problems with directory ", program_name);
+		perror(dir_name);
+		return;
+	}
+
 	struct dirent * tmp_name;
 	struct stat tmp_stat;
 	char full_file_name[256];
-	char dir_name[256];
 
-	struct queue my_queue;
-	init_queue(&my_queue);
-	int good;
-	push_queue(&my_queue, base_dir_name);
 
-	while (!queue_is_empty(&my_queue)) {
-		pop_queue(&my_queue, dir_name);
+	tmp_name = readdir(dir);
 
-		DIR * dir = opendir(dir_name);
-
-		if (dir == NULL){
-			fprintf(stderr, "%s: problems with directory ", program_name);
-			perror(dir_name);
-			continue;
+	printf("%s contains:\n", dir_name);
+	while (tmp_name){
+		if (tmp_name->d_name[0] != '.' || flag_a) {//print all files if -a has been passed
+			if (flag_l){// print full information
+				strcpy(full_file_name, dir_name);
+				strcat(full_file_name, "/");
+				strcat(full_file_name, tmp_name->d_name);
+				if(stat(full_file_name, &tmp_stat) == 0)
+					print_full_file_info(tmp_name->d_name, &tmp_stat);
+				else 
+					perror(tmp_name->d_name);
+			} else
+				printf("\t%s\n", tmp_name->d_name);
 		}
-
 		tmp_name = readdir(dir);
-		
-		printf("%s contains:\n", dir_name);
-		while (tmp_name){
-			good = 0;
-			if (tmp_name->d_name[0] != '.' || flag_a) {//print all files if -a has been passed
-				if (flag_l){// print full information
-					strcpy(full_file_name, dir_name);
-					strcat(full_file_name, "/");
-					strcat(full_file_name, tmp_name->d_name);
-					if(lstat(full_file_name, &tmp_stat) == 0) {
-						good = 1;
-						print_full_file_info(tmp_name->d_name, &tmp_stat);
-					} else 
-						perror(tmp_name->d_name);
-				} else
-					printf("\t%s\n", tmp_name->d_name);
-			}
-			if (flag_r) {
-				if (!flag_l){// if lstat hasn't been called
-					strcpy(full_file_name, dir_name);
-					strcat(full_file_name, "/");
-					strcat(full_file_name, tmp_name->d_name);
-					if(lstat(full_file_name, &tmp_stat) == 0)
-						good = 1;
-					else 
-						perror(tmp_name->d_name);
-				}
-				if (good && strcmp(tmp_name->d_name, "..") && strcmp(tmp_name->d_name, ".") && S_ISDIR(tmp_stat.st_mode))
-					push_queue(&my_queue, full_file_name);
-			}
-			tmp_name = readdir(dir);
-		}
-
-		closedir(dir);
 	}
+
+	closedir(dir);
 
 }
 
@@ -190,19 +164,17 @@ int main(int argc, char* argv[])
 {
 
 	int next_option;
-	const char* short_options = "hlar";
+	const char* short_options = "hla";
 
 	const struct option long_options[] = {
 		{"help", 0, NULL, 'h'},
 		{"list", 0, NULL, 'l'},
 		{"all", 0, NULL, 'a'},
-		{"recursively", 0, NULL, 'r'},
 		{ NULL, 0, NULL, 0}
 	};
 
 	int flag_l = 0;
 	int flag_a = 0;
-	int flag_r = 0;
 	const char *program_name = argv[0];
 
 	do {
@@ -218,9 +190,6 @@ int main(int argc, char* argv[])
 			case 'a' :
 				flag_a = 1;
 				break;
-			case 'r' :
-				flag_r = 1;
-				break;
 			case '?' :
 				print_usage(program_name);
 				exit(1);
@@ -233,11 +202,11 @@ int main(int argc, char* argv[])
 	} while (next_option != -1); // end of options processing
 
 	if (argc == optind){ //working directory is implicit parameter
-		print_dir(program_name, ".", flag_l, flag_a, flag_r);
+		print_dir(program_name, ".", flag_l, flag_a);
 	}
 
 	for(int i = optind; i < argc; i++){
-		print_dir(program_name, argv[i], flag_l, flag_a, flag_r);
+		print_dir(program_name, argv[i], flag_l, flag_a);
 	}
 
 
