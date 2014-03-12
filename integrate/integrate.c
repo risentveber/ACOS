@@ -7,7 +7,7 @@
 
 #define BASE_PARTION 100
 
-double f(double x)
+double f(double x)//function which integral we calculate
 {
 	return x*x*x;
 }
@@ -49,15 +49,24 @@ void calculate(double a, double b, int k)
 		perror("cann't open to write");
 }
 
+void print_usage(const char *prog_name)
+{
+	printf("usage of %s is:\n", prog_name);
+	printf("\t%s <number_of_parts>\n", prog_name);	
+}
+
 int main(int argc, char const *argv[])
 {
 	double result = 0;
 	int pid = 10;
 	int started = 0;
-	int n = 10;//atoi(argv[1]);
-	if (n < 0){
-		printf("usage");
+	int n = 10;
+
+	if (argc != 2 || 0 >= (n = atoi(argv[1])) ){
+		print_usage(argv[0]);
+		exit(0);
 	}
+
 	double tmp_a, tmp_b;
 	double a = 0;
 	double b = 10;
