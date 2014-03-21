@@ -52,53 +52,19 @@ void print_full_file_info(const char* file_name, const struct stat * f_stat)
 	else
 		putchar('-');
 
-	//owner permissions
-	if (mode & S_IRUSR)
-		putchar('r');
-	else
-		putchar('-');
-
-	if (mode & S_IWUSR)
-		putchar('w');
-	else
-		putchar('-');
-
-	if (mode & S_IXUSR)
-		putchar('x');
-	else
-		putchar('-');
-		
-	//group permissions
-	if (mode & S_IRGRP)
-		putchar('r');
-	else
-		putchar('-');
-
-	if (mode & S_IWGRP)
-		putchar('w');
-	else
-		putchar('-');
-
-	if (mode & S_IXGRP)
-		putchar('x');
-	else
-		putchar('-');
-		
-	//others permissions
-	if (mode & S_IROTH)
-		putchar('r');
-	else
-		putchar('-');
-
-	if (mode & S_IWOTH)
-		putchar('w');
-	else
-		putchar('-');
-
-	if (mode & S_IXOTH)
-		putchar('x');
-	else
-		putchar('-');
+	int i;
+	for (i = 8; i >= 0; --i)
+	{
+		if (mode & 1 << i){
+			if((i+1)% 3 == 0)
+				putchar('r');
+			if((i+1)% 3 == 1)
+				putchar('x');
+			if((i+1)% 3 == 2)
+				putchar('w');
+		}else 
+			putchar('-');
+	}
 	
 	
 	tmp_pwd = getpwuid(f_stat->st_uid);
