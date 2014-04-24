@@ -3,13 +3,15 @@
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <gmp.h>
 
 
 #define N 5
+#define TIMES 1
 
 struct job {
   struct job* next; 
-  int a, b, c;
+  mpz_t a, b, c;
 };
 
 struct queue
@@ -24,14 +26,29 @@ struct queue job_queue;
 
 pthread_cond_t queue_flag;
 pthread_mutex_t queue_mutex;
+pthread_mutex_t print = PTHREAD_MUTEX_INITIALIZER;
 
 void process_job (struct job *t)
 {
-  static pthread_mutex_t print = PTHREAD_MUTEX_INITIALIZER;
-  pthread_mutex_lock(&print);
-  printf("%d\n", t->a);
-  pthread_mutex_unlock(&print);
+  mpz_t res, i;
+  mpz_init(i);
+  //mpz_init_set_ui(tmp, 1U);
+  mpz_init_set_ui(res, 1U); 
+  
+  while (1){
+    mpz_add_ui(i, i, 1U);
+    mpz_mul(res, res, t->a);
+    mpz_mod(res, res, t->b);
+    if (mpz_cmp(res, t->c) == 0){
+      pthread_mutex_lock(&print);
+      gmp_printf ("%Zd\n", i);
+      pthread_mutex_unlock(&print);
+      break;
 
+    }
+
+  }
+  mpz_clears(i, res, NULL);
 }
 
 void initialize_job_queue ()
@@ -49,9 +66,17 @@ void destroy_queue()
 {
   pthread_mutex_lock (&queue_mutex);
   job_queue.destroyed = 1;
-  pthread_cond_signal (&queue_flag);
+  pthread_cond_broadcast (&queue_flag);
   pthread_mutex_unlock (&queue_mutex);
 
+}
+
+void queue_elem_free(struct job *t)
+{
+  mpz_clear(t->a);
+  mpz_clear(t->b);
+  mpz_clear(t->c);
+  free(t);
 }
 
 void* thread_function (void* thread_arg)
@@ -82,20 +107,24 @@ void* thread_function (void* thread_arg)
         pthread_mutex_unlock (&queue_mutex);
 
         process_job (current_job);
-        free (current_job);
+        queue_elem_free (current_job);
     }
     return NULL;
 }
 
 
 
-void enqueue_job (int a, int b, int c)
+void enqueue_job (mpz_t a, mpz_t b, mpz_t c)
 {
   struct job* new_job;
   new_job = (struct job*) malloc (sizeof (struct job));
-  new_job->a = a;
-  new_job->b = b;
-  new_job->c = c;
+  mpz_init(new_job->a);
+  mpz_init(new_job->b);
+  mpz_init(new_job->c);
+
+  mpz_set(new_job->a, a);
+  mpz_set(new_job->b, b);
+  mpz_set(new_job->c, c);
 
   pthread_mutex_lock (&queue_mutex);
   new_job->next = NULL;
@@ -121,8 +150,15 @@ int main(int argc, char ** argv)
       exit(1);
     }
 
-  for(i = 0; i < 100; i++)
-    enqueue_job(i, 0, 0);
+  mpz_t a, b, c;
+  mpz_inits(a, b, c, NULL);
+
+  for(i = 0; i < TIMES; i++){
+    gmp_scanf("%Zd %Zd %Zd", a, b, c);
+    enqueue_job(a, b, c);
+  }
+
+  //adding into queue
 
   destroy_queue();//задания больше не будут поступать
   
