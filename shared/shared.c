@@ -12,29 +12,38 @@
 #include "mysem.h"
 
 #define FILE_LENGTH  0x1000
-#define BUFF_SIZE 100 // FILE_LENGTH > buffsize + 100
-#define DATA_SIZE 1000
+#define BUFF_SIZE 1024 // FILE_LENGTH > buffsize + 100
+#define DATA_SIZE 50000
+#define EX_COUNT 100
 #define END_OF_TUBE -1
 const char * file =  "shared_file";
 
-
 struct tube
 {
-	int bad;
-	// [][][][]begin[][][][]middle[][][][][][]end[][][][]
 	int begin;
 	int middle;
 	int end; 
+
+	int res_data;
+	int emp_data;
+	int wrt_data;
+
+	int stop_write;
+	int stop_read;
 
 	int arr[BUFF_SIZE];
 };
 
 void tube_init(struct tube * t)
 {
+	t->stop_read = 0;
+	t->stop_write = 0;
 	t->begin = 0;
 	t->middle = 0;
 	t->end = 0;
-	t->bad = 0;
+	t->res_data = 0;
+	t->wrt_data = 0;
+	t->emp_data = 1;
 }
 
 struct span
@@ -42,6 +51,7 @@ struct span
 	int left;
 	int right;
 };
+
 
 void file_creating()
 {
@@ -87,12 +97,11 @@ void * mmap_preparing()
 	return memory;
 }
 
-key_t sem_name1 = 233546242;
-key_t sem_name2 = 231251325;
-key_t sem_name3 = 135245125;
+key_t sem_name1 = 23354624;
+key_t sem_name2 = 23125132;
+key_t sem_name3 = 13524512;
 
-int full, empty, test;//семафоры
-
+int stop_read, stop_write, test;
 
 
 int distance(int l, int r) // [l, r) - здесь и далее интервалы такого вида
@@ -104,109 +113,136 @@ int distance(int l, int r) // [l, r) - здесь и далее интервал
 }
 
 void how_sum(struct tube *t, struct span *s, int count)
-//записывает в span не нулевой интервал для суммирования не больше count
 {
-	bin_sem_wait(empty);//подождать когда что-то появится
+	int yes = 0;
+	while (!yes){
+		bin_sem_wait(stop_read);
 
-	bin_sem_wait(test);
+		bin_sem_wait(test);
+		if (t->wrt_data){
+			yes = 1;
+			int c = distance(t->begin, t->middle);
+			if (c == 0 && t->wrt_data)
+			c = BUFF_SIZE;
 
-	
-	int c = distance(t->begin, t->middle);
-	if (c == 0)//потому как буфер не пуст
-		c = BUFF_SIZE;
-	if (c < count)
-		count = c;
-	s->left = t->begin;
-	s->right = (t->begin + count)%BUFF_SIZE;
-	if(distance( s->right, t->middle))//если что-то осталось не считанное, поднять семафор наличия данных
-		bin_sem_post(empty);
-
-	bin_sem_post(test);
-}
-
-void free_sum(struct tube *t, struct span *s)
-//освобождает span - интервал для записи
-{
-	bin_sem_wait(test);
-
-	t->begin = s->right;
-	bin_sem_post(full);// мы что-то считали поэтому буффер не полон
-
-	bin_sem_post(test);
-
+			if (c < count)
+				count = c;
+			s->left = t->begin;
+			s->right = (t->begin + count)%BUFF_SIZE;
+		} else 
+			t->stop_read = 1;
+		
+		bin_sem_post(test);
+	}
+	bin_sem_post(stop_read);
+	return;
 }
 
 void how_write(struct tube *t, struct span *s, int count)
-//записывает в span не нулевой интервал зарезервированный для записи не больше count
 {
-	bin_sem_wait(full);//подождать когда появится место
+	int yes = 0;
+	while (!yes){
+		bin_sem_wait(stop_write);
+		bin_sem_wait(test);
+		if (t->emp_data){
+			yes = 1;
+			int c = distance(t->end, t->begin);
+			if (c == 0 && t->emp_data)
+				c = BUFF_SIZE;
 
+			if (c < count)
+				count = c;
+
+			t->res_data = 1;
+			s->left = t->end;
+			t->end = (t->end + count)%BUFF_SIZE;//
+			s->right = t->end;
+		
+		} else 
+			t->stop_write = 1;	
+
+		bin_sem_post(test);
+	}
+	bin_sem_post(stop_write);
+}
+	
+
+
+void free_sum(struct tube *t, struct span *s)
+{
 	bin_sem_wait(test);
+	
+	t->begin = s->right;
+	t->emp_data = 1;
 
-	int c = distance(t->end, t->begin);
-	if (c == 0)
-		c = BUFF_SIZE;
-	if (c < count)
-		count = c;
-	s->left = t->end;
-	t->end = (t->end + count)%BUFF_SIZE;
-	s->right = t->end;
-
-	if(distance( t->end, t->begin))//если что-то осталось пустое место, поднять семафор наличия места
-		bin_sem_post(full);
-
+	if(distance(t->begin, t->middle)){
+		t->wrt_data = 1;
+	} else
+		t->wrt_data = 0;
+	
+	if(t->stop_write){
+		t->stop_write = 0;
+		bin_sem_post(stop_write);
+	}
+	
 	bin_sem_post(test);
+	return;
 }
 
 void set_write(struct tube *t, struct span *s)
-//устанавливает span - интервал для записанным
 {
 	bin_sem_wait(test);
 
 	t->middle = s->right;
-	bin_sem_post(empty);// мы что-то записали поэтому буффер не пуст
+	
+	t->wrt_data = 1;
+	t->res_data = 0;
+
+	if(distance(t->end, t->begin)){
+		t->emp_data = 1;
+	}else
+		t->emp_data = 0;
+
+	if(t->stop_read){
+		t->stop_read = 0;
+		bin_sem_post(stop_read);
+	}
 
 	bin_sem_post(test);
-
+	return;
 }
 
 int sum_from_tube(struct tube * t, int * sum, int num)
 {
-	//if(t->bad)
-	//	return END_OF_TUBE;
-
 	int i;
 	struct span s;
 	how_sum(t, &s, num);
-	int d = distance(s.left, s.right);
+
+	int d = distance(s.left, s.right);//интервал обязательно не нулевой
 	if (d == 0)
 		d = BUFF_SIZE;
-	for(i = 0; i < d; i++){
+	
+	for(i = 0; i < d; i++)
 		*sum += t->arr[(i + s.left) %BUFF_SIZE];
-	}
-
+	
 	free_sum(t, &s);
 
 	return d;
-
 }
 
 int write_to_tube(struct tube * t, int * val, int num)
 {
-	//if(t->bad)
-	//	return END_OF_TUBE;
-
-	struct span s;
-
-	how_write(t, &s, num);
-	
 	int i;
+	struct span s;
+	how_write(t, &s, num);
+
 	int d =  distance(s.left, s.right);
 	if (d == 0)
 		d = BUFF_SIZE;
-	for(i = 0; i < d; i++)
+
+	for(i = 0; i < d; i++) 
 		t->arr[(s.left + i)%BUFF_SIZE] = val[i];
-		
+	
 	set_write(t, &s);
 
 	return d;
@@ -231,53 +267,90 @@ int main()
 	printf("datasize: %d\n", DATA_SIZE);
 
 	//создание семафоров и ветвление
-	full = bin_sem_alloc(sem_name1);
-	empty = bin_sem_alloc(sem_name2);
+	stop_read = bin_sem_alloc(sem_name1);
+	stop_write = bin_sem_alloc(sem_name2);
 	test = bin_sem_alloc(sem_name3);
-	if (full < 0 || empty < 0 || test < 0 ||
-		bin_sem_init(full) < 0 ||  bin_sem_init(empty) < 0 || bin_sem_init(test) < 0){
+	if (stop_write < 0 || stop_read < 0 || test < 0 ||
+		bin_sem_init(stop_write) < 0 ||  bin_sem_init(stop_read) < 0 || bin_sem_init(test) < 0){
 		perror("semaphore allocation failed");
 		exit(1);
 	}
-	
-	bin_sem_wait(empty);//изначально буфер пуст
 
 	pid_t child = fork();
 
-	int i;
+	long long int i;
 	int result = 0;
 	int writed = 0;
 	int summed = 0;
+	int c;
 
 	if (child > 0){// parent
 		int a[DATA_SIZE];		
-		
-		for(i = 0; i < DATA_SIZE; i++)
-				result += a[i];
+		srand(time(NULL));
+		for(c = 0; c < DATA_SIZE; c++)		
+			a[c] =  rand();
 
-		while (writed < DATA_SIZE){
-			//for(i = 0; i < 50; i++)
-			//	result += a[i];
-			writed += write_to_tube((struct tube *)shared_memory, a + writed, min(50, DATA_SIZE - writed));
-			//printf("parent : writed %d : result %d\n", writed, result );
+		struct timeval t1, t2;
+		long long int diff;
+		int num = 0;
+		printf("%5s%10s%15s%15s\n", "num", "size","average_time", "speed[Mb/s]");
+		for (i = 1; i <= DATA_SIZE; i = i*2){
+			num++;
+			gettimeofday(&t1, NULL);
+			for(c = 0; c < EX_COUNT; c++){
+				writed = 0;
+				while (writed < i)
+					writed += write_to_tube((struct tube *)shared_memory, a + writed, i - writed);
+			}
+			gettimeofday(&t2, NULL);
+			diff = (t2.tv_sec - t1.tv_sec)*1000000 + t2.tv_usec - t1.tv_usec;           
+			printf("%5d%10lld%15lf%15lf \n", num, i*sizeof(int),
+				(double)(diff)/EX_COUNT, EX_COUNT*i*sizeof(int)/(double)(diff)/1048576*1000000);
 		}
-		printf("zzparent:result: %d\n", result);
-		
+		wait(NULL);
 	} else if (child == 0){ //child
-		while (summed < DATA_SIZE){
-			summed += sum_from_tube((struct tube *)shared_memory, &result, min(10, DATA_SIZE - summed));
-			//if(summed % 50 == 0)
-				//printf("child : summed %d : result %d\n", summed, result );
+		
+		for (i = 1; i <= DATA_SIZE; i = i*2){
+			for(c = 0; c < EX_COUNT; c++){
+				summed = 0;
+				while (summed < i)
+					summed += sum_from_tube((struct tube *)shared_memory, &result, i - summed);
+			}
 		}
-		printf("zzchild:result: %d\n", result);
 
 	} else { // something bad has occured
 		perror("cann't fork");
 	}
 
+	//#################### проверка работы сумматора##############################
+	/*if (child > 0){// parent
+		int a[DATA_SIZE];		
+		
+		int h;
+		result = 0;
+		for(h = 0; h < DATA_SIZE; h++)
+			result += a[h];
+		printf("parent: %d\n", result);
+		writed = 0;
+		while (writed < DATA_SIZE)
+			writed += write_to_tube((struct tube *)shared_memory, a + writed, min(37, DATA_SIZE - writed));
+		wait(NULL);
+	} else if (child == 0){ //child
+		
+		result = 0;
+		summed = 0;
+		while (summed < DATA_SIZE)
+			summed += sum_from_tube((struct tube *)shared_memory, &result, min(59, DATA_SIZE - summed));
+		printf("child : %d\n", result);
+
+	} else { // something bad has occured
+		perror("cann't fork");
+	}*/
+	//#################### проверка работы сумматора##############################
+
 	munmap(shared_memory, FILE_LENGTH);
-	bin_sem_free(full);
-	bin_sem_free(empty);
+	bin_sem_free(stop_read);
+	bin_sem_free(stop_write);
 	bin_sem_free(test);
 	shm_unlink(file);
 	return 0;
