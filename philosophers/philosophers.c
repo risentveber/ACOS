@@ -41,7 +41,7 @@ void take_forks(int i)
 		pthread_mutex_lock(&meta);
 
 		state[i] = HUNGRY;
-		test(i);
+		test(i);//global testing
 
 		pthread_mutex_unlock(&meta);    
 		pthread_mutex_lock(mtx + i);     
@@ -76,13 +76,16 @@ void * philosopher(void *arument)
 {
 	int index = *(int *)arument;
 
-	int k;
+	int k, t;
+
 	for (k = 0; k < K; k++) {  
 		think(index);
-		//usleep(1000);//thinking     
+		t = abs(rand() % 1000);
+		usleep(t);//thinking     
 		take_forks(index);   
 		eat(index);
-		//usleep(1000);//eating       
+		t = abs(rand() % 1000);
+		usleep(t);//eating       
 		put_forks(index);   
 	}
 
