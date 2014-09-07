@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 	sin.sin_port = port;
 
 	{
-		struct hostent* host = gethostbyname("93.175.2.146");
+		struct hostent* host = gethostbyname("127.0.0.1");
 		if (host == NULL)
 			fatal("hostname is bad");
 		memcpy(&sin.sin_addr.s_addr, host->h_addr_list[0], host->h_length);

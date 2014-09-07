@@ -7,7 +7,7 @@
 
 
 #define N 5
-#define TIMES 1
+#define TIMES 2
 
 struct job {
   struct job* next; 

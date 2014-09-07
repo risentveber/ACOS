@@ -12,7 +12,7 @@
 #include "mysem.h"
 
 #define FILE_LENGTH  0x1000
-#define BUFF_SIZE 1024 // FILE_LENGTH > buffsize + 100
+#define BUFF_SIZE 128 // FILE_LENGTH > buffsize + 100
 #define DATA_SIZE 50000
 #define EX_COUNT 100
 #define END_OF_TUBE -1
@@ -97,9 +97,9 @@ void * mmap_preparing()
 	return memory;
 }
 
-key_t sem_name1 = 23354624;
-key_t sem_name2 = 23125132;
-key_t sem_name3 = 13524512;
+key_t sem_name1 = 233546248;
+key_t sem_name2 = 231251328;
+key_t sem_name3 = 135245128;
 
 int stop_read, stop_write, test;
 
@@ -283,7 +283,7 @@ int main()
 	int writed = 0;
 	int summed = 0;
 	int c;
-
+	/*
 	if (child > 0){// parent
 		int a[DATA_SIZE];		
 		srand(time(NULL));
@@ -320,10 +320,10 @@ int main()
 
 	} else { // something bad has occured
 		perror("cann't fork");
-	}
+	}*/
 
 	//#################### проверка работы сумматора##############################
-	/*if (child > 0){// parent
+	if (child > 0){// parent
 		int a[DATA_SIZE];		
 		
 		int h;
@@ -333,21 +333,20 @@ int main()
 		printf("parent: %d\n", result);
 		writed = 0;
 		while (writed < DATA_SIZE)
-			writed += write_to_tube((struct tube *)shared_memory, a + writed, min(37, DATA_SIZE - writed));
+			writed += write_to_tube((struct tube *)shared_memory, a + writed, min(37,DATA_SIZE - writed));
 		wait(NULL);
 	} else if (child == 0){ //child
 		
 		result = 0;
 		summed = 0;
 		while (summed < DATA_SIZE)
-			summed += sum_from_tube((struct tube *)shared_memory, &result, min(59, DATA_SIZE - summed));
+			summed += sum_from_tube((struct tube *)shared_memory, &result, min(45,DATA_SIZE - summed));
 		printf("child : %d\n", result);
 
 	} else { // something bad has occured
 		perror("cann't fork");
-	}*/
+	}
 	//#################### проверка работы сумматора##############################
-
 	munmap(shared_memory, FILE_LENGTH);
 	bin_sem_free(stop_read);
 	bin_sem_free(stop_write);
