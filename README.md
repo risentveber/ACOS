@@ -1,4 +1,4 @@
 ACOS
 ====
 
-it contains ACOS homework
+It contains ACOS(Architecture of computer and operation systems) course homework.
